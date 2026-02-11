@@ -37,10 +37,10 @@ openclaw-saas/
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: Next.js 15, React 19, Tailwind CSS, shadcn/ui
+- **Frontend**: Next.js 16, React 19, Tailwind CSS, shadcn/ui
 - **Backend**: Node.js, Docker SDK
-- **Database**: PostgreSQL (Supabase)
-- **Auth**: Supabase Auth
+- **Database**: PostgreSQL (bring your own)
+- **Auth**: JWT / Session-based
 - **Payments**: Stripe
 - **Infrastructure**: Docker, Traefik
 - **Monorepo**: Turborepo
@@ -67,13 +67,6 @@ openclaw-saas/
 - Complete filesystem isolation
 - OAuth-only (no API key storage)
 - Encrypted tokens at rest
-
-## 📚 Documentation
-
-- [Setup Guide](docs/SETUP.md)
-- [API Reference](docs/API.md)
-- [Docker Configuration](docs/DOCKER.md)
-- [Deployment](docs/DEPLOYMENT.md)
 
 ## 🧪 Development
 

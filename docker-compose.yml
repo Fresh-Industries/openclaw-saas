@@ -31,7 +31,7 @@ services:
       - "traefik.http.routers.api.rule=Host(`api.openclaw-saas.local`)"
       - "traefik.http.routers.api.entrypoints=web"
     environment:
-      - DATABASE_URL=postgresql://user:pass@db:5432/openclaw_saas
+      - DATABASE_URL=postgresql://postgres:secret@db:5432/openclaw_saas
       - REDIS_URL=redis://cache:6379
       - OPENCLAW_DOCKER_SOCKET=/var/run/docker.sock
     depends_on:
@@ -41,13 +41,14 @@ services:
       - web
       - internal
 
-  # Database
+  # PostgreSQL Database
   db:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
+    container_name: openclaw-postgres
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
-      - POSTGRES_DB=openclaw_saas
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: openclaw_saas
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -56,6 +57,7 @@ services:
   # Redis for caching
   cache:
     image: redis:7-alpine
+    container_name: openclaw-redis
     networks:
       - internal
 

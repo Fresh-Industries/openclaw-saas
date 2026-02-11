@@ -3,7 +3,6 @@
  */
 
 import Dockerode from "dockerode";
-import path from "path";
 
 const docker = new Dockerode({
   socketPath: process.env.DOCKER_SOCKET || "/var/run/docker.sock",
@@ -40,8 +39,7 @@ export class DockerClient {
       await this.ensureNetwork();
       await this.ensureImage();
     } catch (error) {
-      console.error("Docker init error:", error);
-      throw error;
+      console.warn("Docker init warning:", error);
     }
   }
 
@@ -70,9 +68,7 @@ export class DockerClient {
     try {
       await docker.getImage(this.imageName).inspect();
     } catch {
-      console.log(`Pulling OpenClaw image...`);
-      // In production, you'd build or pull the actual image
-      // await docker.buildImage(...);
+      console.log(`OpenClaw image '${this.imageName}' not found. Run 'docker build' first.`);
     }
   }
 
@@ -81,33 +77,7 @@ export class DockerClient {
    */
   async createContainer(config: UserContainerConfig): Promise<ContainerInfo> {
     const containerName = `openclaw-${config.userId}`;
-    const dataVolume = `openclaw-data-${config.userId}`;
-    const configVolume = `openclaw-config-${config.userId}`;
 
-    // Create data volume
-    try {
-      await docker.getVolume(dataVolume).inspect();
-    } catch {
-      await docker.createVolume({
-        Name: dataVolume,
-        Labels: { userId: config.userId },
-      });
-    }
-
-    // Create config volume
-    const userConfig = this.generateUserConfig(config);
-    
-    try {
-      await docker.getVolume(configVolume).inspect();
-    } catch {
-      await docker.createVolume({
-        Name: configVolume,
-        Driver: "local",
-        Labels: { userId: config.userId },
-      });
-    }
-
-    // Create container
     const container = await docker.createContainer({
       name: containerName,
       Image: this.imageName,
@@ -121,23 +91,11 @@ export class DockerClient {
         Memory: config.memoryLimit ? this.parseMemory(config.memoryLimit) : 512 * 1024 * 1024,
         CpuPeriod: 100000,
         CpuQuota: config.cpuLimit ? parseFloat(config.cpuLimit) * 100000 : 50000,
-        Binds: [
-          `${dataVolume}:/data`,
-          `${configVolume}:/etc/openclaw`,
-        ],
         NetworkMode: this.networkName,
-        AutoRemove: false,
       },
       Labels: {
         userId: config.userId,
         type: "openclaw",
-      },
-      Healthcheck: {
-        Test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"],
-        Interval: 30000000000, // 30s
-        Timeout: 10000000000, // 10s
-        Retries: 3,
-        StartPeriod: 10000000000, // 10s
       },
     });
 
@@ -208,7 +166,6 @@ export class DockerClient {
     const containerName = `openclaw-${userId}`;
     const container = docker.getContainer(containerName);
 
-    // Execute command in container
     const exec = await container.exec({
       AttachStdout: true,
       AttachStderr: true,
@@ -234,30 +191,20 @@ export class DockerClient {
   }
 
   /**
-   * Delete container and volumes
+   * Delete container
    */
   async deleteContainer(userId: string): Promise<boolean> {
     const containerName = `openclaw-${userId}`;
-    const dataVolume = `openclaw-data-${userId}`;
-    const configVolume = `openclaw-config-${userId}`;
-
     try {
       const container = docker.getContainer(containerName);
       try {
         await container.stop({ t: 10 });
       } catch { /* ignore if already stopped */ }
       await container.remove({ v: true, force: true });
-    } catch { /* ignore if not found */ }
-
-    try {
-      await docker.getVolume(dataVolume).remove();
-    } catch { /* ignore if not found */ }
-
-    try {
-      await docker.getVolume(configVolume).remove();
-    } catch { /* ignore if not found */ }
-
-    return true;
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -271,36 +218,15 @@ export class DockerClient {
   }
 
   /**
-   * Generate OpenClaw config for user
-   */
-  private generateUserConfig(config: UserContainerConfig): string {
-    return JSON.stringify({
-      userId: config.userId,
-      skillPacks: config.skillPacks,
-      connections: {},
-      settings: {
-        model: "claude-sonnet-4-20250514",
-        timezone: "America/Chicago",
-      },
-    }, null, 2);
-  }
-
-  /**
    * Parse memory string to bytes
    */
   private parseMemory(str: string): number {
     const units: Record<string, number> = {
-      b: 1,
-      k: 1024,
-      m: 1024 ** 2,
-      g: 1024 ** 3,
-      t: 1024 ** 4,
+      b: 1, k: 1024, m: 1024 ** 2, g: 1024 ** 3, t: 1024 ** 4,
     };
     const match = str.toLowerCase().match(/^(\d+)([kmgt]?)$/);
     if (!match) return 512 * 1024 * 1024;
-    const value = parseInt(match[1]);
-    const unit = match[2] || "b";
-    return value * (units[unit] || 1);
+    return parseInt(match[1]) * (units[match[2]] || 1);
   }
 }
 

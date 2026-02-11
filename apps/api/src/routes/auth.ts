@@ -1,117 +1,73 @@
 /**
- * Auth Routes
+ * Auth Routes - Express handlers for Better Auth
  */
 
-import { Router } from "express";
-import { authenticateUser, createUser, getUserById, updateUser } from "../lib/auth";
-import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
-import { z } from "zod";
+import { Router, Request, Response } from "express";
+import { auth } from "../lib/auth";
 
 const router = Router();
 
-const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  name: z.string().optional(),
+// Better Auth handles all auth endpoints
+// Just mount it on /api/auth/*
+
+router.get("/sign-up", async (req: Request, res: Response) => {
+  // Better Auth handles this
+  res.json({ message: "Use POST /api/auth/sign-up" });
 });
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string(),
-});
-
-/**
- * POST /auth/register
- */
-router.post("/register", async (req, res) => {
+router.post("/sign-up", async (req: Request, res: Response) => {
   try {
-    const data = registerSchema.parse(req.body);
-    const { user, token } = await createUser(data.email, data.password, data.name);
-    
-    res.status(201).json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        skillPacks: user.skillPacks,
-        subscriptionTier: user.subscriptionTier,
-      },
-      token,
+    const result = await auth.api.signUp({
+      body: req.body,
     });
-  } catch (error) {
-    if (error instanceof Error && error.message === "User already exists") {
-      res.status(409).json({ error: "User already exists" });
-      return;
-    }
-    res.status(400).json({ error: "Invalid request" });
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Sign up failed" });
   }
 });
 
-/**
- * POST /auth/login
- */
-router.post("/login", async (req, res) => {
+router.post("/sign-in", async (req: Request, res: Response) => {
   try {
-    const data = loginSchema.parse(req.body);
-    const result = await authenticateUser(data.email, data.password);
-    
-    if (!result) {
-      res.status(401).json({ error: "Invalid credentials" });
-      return;
-    }
-
-    res.json({
-      user: {
-        id: result.user.id,
-        email: result.user.email,
-        name: result.user.name,
-        skillPacks: result.user.skillPacks,
-        subscriptionTier: result.user.subscriptionTier,
-      },
-      token: result.token,
+    const result = await auth.api.signIn({
+      body: req.body,
     });
-  } catch {
-    res.status(400).json({ error: "Invalid request" });
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Sign in failed" });
   }
 });
 
-/**
- * GET /auth/me
- */
-router.get("/me", authMiddleware, async (req: AuthenticatedRequest, res) => {
-  const user = getUserById(req.user!.id);
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
+router.get("/session", async (req: Request, res: Response) => {
+  try {
+    const result = await auth.api.getSession({
+      headers: req.headers,
+    });
+    res.json(result);
+  } catch (error: any) {
+    res.status(401).json({ error: error.message || "No session" });
   }
-
-  res.json({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    skillPacks: user.skillPacks,
-    subscriptionTier: user.subscriptionTier,
-    createdAt: user.createdAt,
-  });
 });
 
-/**
- * PUT /auth/me
- */
-router.put("/me", authMiddleware, async (req: AuthenticatedRequest, res) => {
-  const user = updateUser(req.user!.id, req.body);
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
+router.post("/sign-out", async (req: Request, res: Response) => {
+  try {
+    const result = await auth.api.signOut({
+      headers: req.headers,
+    });
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message || "Sign out failed" });
   }
+});
 
-  res.json({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    skillPacks: user.skillPacks,
-    subscriptionTier: user.subscriptionTier,
-  });
+router.get("/verify-session", async (req: Request, res: Response) => {
+  try {
+    const result = await auth.api.verifySession({
+      headers: req.headers,
+    });
+    res.json(result);
+  } catch (error: any) {
+    res.status(401).json({ valid: false });
+  }
 });
 
 export default router;

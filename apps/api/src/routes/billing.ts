@@ -2,11 +2,9 @@
  * Billing Routes - Stripe integration
  */
 
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import Stripe from "stripe";
-import { getUserById, updateUser } from "../lib/auth";
-import { authMiddleware, AuthenticatedRequest } from "../middleware/auth";
-import { z } from "zod";
+import { prisma } from "../lib/db";
 
 const router = Router();
 
@@ -14,64 +12,42 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_...", {
   apiVersion: "2024-11-20.acacia",
 });
 
-const PRICES = {
-  personal: { priceId: "price_personal", amount: 2700 }, // $27.00
-  professional: { priceId: "price_professional", amount: 4700 }, // $47.00
-  business: { priceId: "price_business", amount: 9700 }, // $97.00
+const PLANS = {
+  free: { priceId: null, price: 0, name: "Free" },
+  personal: { priceId: "price_personal", price: 2700, name: "Personal" },
+  professional: { priceId: "price_professional", price: 4700, name: "Professional" },
+  business: { priceId: "price_business", price: 9700, name: "Business" },
 };
 
 /**
- * GET /billing/plans
+ * GET /api/billing/plans
  * Get available plans
  */
-router.get("/plans", (req, res) => {
+router.get("/plans", (_req: Request, res: Response) => {
   res.json({
-    plans: [
-      {
-        id: "free",
-        name: "Free",
-        price: 0,
-        features: ["1 skill pack", "Limited usage"],
-      },
-      {
-        id: "personal",
-        name: "Personal",
-        price: 27,
-        priceId: PRICES.personal.priceId,
-        features: ["Personal skill pack", "Unlimited usage", "Email support"],
-      },
-      {
-        id: "professional",
-        name: "Professional",
-        price: 47,
-        priceId: PRICES.professional.priceId,
-        features: ["2 skill packs", "Unlimited usage", "Priority support"],
-      },
-      {
-        id: "business",
-        name: "Business",
-        price: 97,
-        priceId: PRICES.business.priceId,
-        features: ["All skill packs", "Unlimited usage", "24/7 support", "Custom integrations"],
-      },
-    ],
+    plans: Object.entries(PLANS).map(([id, plan]) => ({
+      id,
+      name: plan.name,
+      price: plan.price / 100,
+      priceId: plan.priceId,
+    })),
   });
 });
 
 /**
- * POST /billing/create-checkout
+ * POST /api/billing/create-checkout
  * Create Stripe checkout session
  */
-router.post("/create-checkout", authMiddleware, async (req: AuthenticatedRequest, res) => {
+router.post("/create-checkout", async (req: Request, res: Response) => {
   try {
-    const { planId } = z.object({ planId: z.string() }).parse(req.body);
+    const { userId, planId } = req.body;
     
-    if (!PRICES[planId as keyof typeof PRICES]) {
+    if (!PLANS[planId as keyof typeof PLANS]) {
       res.status(400).json({ error: "Invalid plan" });
       return;
     }
 
-    const user = getUserById(req.user!.id);
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
@@ -82,14 +58,14 @@ router.post("/create-checkout", authMiddleware, async (req: AuthenticatedRequest
       customer_email: user.email,
       line_items: [
         {
-          price: PRICES[planId as keyof typeof PRICES].priceId,
+          price: PLANS[planId as keyof typeof PLANS].priceId!,
           quantity: 1,
         },
       ],
       success_url: `${process.env.FRONTEND_URL}/dashboard?success=true`,
       cancel_url: `${process.env.FRONTEND_URL}/pricing?canceled=true`,
       metadata: {
-        userId: user.id,
+        userId,
         planId,
       },
     });
@@ -102,13 +78,15 @@ router.post("/create-checkout", authMiddleware, async (req: AuthenticatedRequest
 });
 
 /**
- * POST /billing/create-portal
+ * POST /api/billing/create-portal
  * Create Stripe billing portal session
  */
-router.post("/create-portal", authMiddleware, async (req: AuthenticatedRequest, res) => {
+router.post("/create-portal", async (req: Request, res: Response) => {
   try {
-    const user = getUserById(req.user!.id);
-    if (!user || !user.stripeCustomerId) {
+    const { userId } = req.body;
+    
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.stripeCustomerId) {
       res.status(404).json({ error: "No subscription found" });
       return;
     }
@@ -126,44 +104,26 @@ router.post("/create-portal", authMiddleware, async (req: AuthenticatedRequest, 
 });
 
 /**
- * GET /billing/subscription
- * Get current subscription status
+ * GET /api/billing/subscription/:userId
+ * Get user's subscription status
  */
-router.get("/subscription", authMiddleware, async (req: AuthenticatedRequest, res) => {
+router.get("/subscription/:userId", async (req: Request, res: Response) => {
   try {
-    const user = getUserById(req.user!.id);
+    const { userId } = req.params;
+    
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
     }
 
-    if (!user.stripeCustomerId) {
-      res.json({ subscription: null, tier: user.subscriptionTier });
-      return;
-    }
-
-    const subscriptions = await stripe.subscriptions.list({
-      customer: user.stripeCustomerId,
-      status: "active",
-      limit: 1,
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
     });
 
-    if (subscriptions.data.length === 0) {
-      res.json({ subscription: null, tier: "free" });
-      return;
-    }
-
-    const sub = subscriptions.data[0];
-    const tier = sub.metadata?.planId || "professional";
-
     res.json({
-      subscription: {
-        id: sub.id,
-        status: sub.status,
-        currentPeriodEnd: new Date(sub.current_period_end * 1000),
-        cancelAtPeriodEnd: sub.cancel_at_period_end,
-      },
-      tier,
+      tier: user.subscriptionTier,
+      subscription,
     });
   } catch (error) {
     console.error("Get subscription error:", error);
@@ -172,10 +132,10 @@ router.get("/subscription", authMiddleware, async (req: AuthenticatedRequest, re
 });
 
 /**
- * POST /billing/webhook
+ * POST /api/billing/webhook
  * Handle Stripe webhooks
  */
-router.post("/webhook", async (req, res) => {
+router.post("/webhook", async (req: Request, res: Response) => {
   const sig = req.headers["stripe-signature"] as string;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -188,7 +148,7 @@ router.post("/webhook", async (req, res) => {
       event = req.body as Stripe.Event;
     }
   } catch (error) {
-    console.error("Webhook signature verification failed:", error);
+    console.error("Webhook verification failed:", error);
     res.status(400).json({ error: "Webhook error" });
     return;
   }
@@ -197,10 +157,29 @@ router.post("/webhook", async (req, res) => {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        if (session.metadata?.userId) {
-          updateUser(session.metadata.userId, {
-            stripeCustomerId: session.customer as string,
-            subscriptionTier: session.metadata.planId as any,
+        if (session.metadata?.userId && session.metadata?.planId) {
+          await prisma.user.update({
+            where: { id: session.metadata.userId },
+            data: {
+              stripeCustomerId: session.customer as string,
+              subscriptionTier: session.metadata.planId,
+            },
+          });
+          
+          await prisma.subscription.upsert({
+            where: { userId: session.metadata.userId },
+            create: {
+              userId: session.metadata.userId,
+              stripeCustomerId: session.customer as string,
+              stripeSubscriptionId: session.subscription as string,
+              tier: session.metadata.planId,
+              status: "active",
+            },
+            update: {
+              stripeSubscriptionId: session.subscription as string,
+              tier: session.metadata.planId,
+              status: "active",
+            },
           });
         }
         break;
@@ -211,15 +190,18 @@ router.post("/webhook", async (req, res) => {
         const sub = event.data.object as Stripe.Subscription;
         const customerId = sub.customer as string;
         
-        // Find user by stripe customer ID
-        const users = await import("../lib/auth").then((m) => m.getAllUsers());
-        const user = users.find((u) => u.stripeCustomerId === customerId);
+        const user = await prisma.user.findFirst({
+          where: { stripeCustomerId: customerId },
+        });
         
         if (user) {
-          updateUser(user.id, {
-            subscriptionTier: sub.status === "active" 
-              ? (sub.metadata?.planId as any) 
-              : "free",
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              subscriptionTier: sub.status === "active" 
+                ? "professional" 
+                : "free",
+            },
           });
         }
         break;

@@ -1,0 +1,104 @@
+// Prisma schema for Better Auth + OpenClaw SaaS
+// Provider: postgresql (or sqlite for dev)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"  // Change to "postgresql" for production
+  url      = env("DATABASE_URL")
+}
+
+// Better Auth Models
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      Session[]
+  accounts      Account[]
+  
+  // OpenClaw SaaS specific
+  skillPacks          String[]  @default([])
+  subscriptionTier     String    @default("free")
+  stripeCustomerId     String?
+  containers          Container[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  ipAddress    String?
+  userAgent    String?
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  password              String?
+  scope                 String?
+  idToken               String?
+  userId                String
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([identifier, value])
+}
+
+// OpenClaw Container Model
+model Container {
+  id            String    @id @default(cuid())
+  userId        String
+  containerId   String    @unique
+  name          String
+  status        String    @default("created")
+  skillPacks    String    @default("[]")
+  memoryLimit   String?
+  cpuLimit      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Billing Model
+model Subscription {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  stripeCustomerId String?
+  stripeSubscriptionId String?
+  tier             String    @default("free")
+  status           String?
+  currentPeriodEnd DateTime?
+  cancelAtPeriodEnd Boolean  @default(false)
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}

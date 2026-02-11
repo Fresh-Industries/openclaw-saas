@@ -1,12 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    turbo: {
-      rules: {
-        "*.svg": ["@svgr/webpack"],
-      },
-    },
-  },
   images: {
     remotePatterns: [
       {

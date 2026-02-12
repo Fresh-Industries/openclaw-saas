@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { signUp } from "better-auth/react";
 import { Bot, ArrowRight, Loader2, Github } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { signIn, signUp } from "@/lib/auth";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -45,7 +45,7 @@ export default function SignupPage() {
     setIsLoading(true);
 
     try {
-      const result = await signUp({
+      const result = await signUp.email({
         name: data.name,
         email: data.email,
         password: data.password,
@@ -80,7 +80,7 @@ export default function SignupPage() {
   const handleGithubSignUp = async () => {
     setIsLoading(true);
     try {
-      await signUp.social({
+      await signIn.social({
         provider: "github",
       });
     } catch (err) {
@@ -127,7 +127,7 @@ export default function SignupPage() {
           </div>
 
           {/* Signup Form */}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4}>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
               <Input

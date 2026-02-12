@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Bot, Shield, Zap } from "lucide-react";
+import { ArrowRight, Bot, Shield, Zap, Briefcase } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";

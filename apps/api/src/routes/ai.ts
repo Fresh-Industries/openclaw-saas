@@ -5,7 +5,6 @@
 import { Router, Request, Response } from "express";
 import { streamText, CoreMessage, generateText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
-import { createMiniMax } from "@ai-sdk/minimax";
 import { prisma } from "../lib/db";
 import { z } from "zod";
 
@@ -39,9 +38,10 @@ const openai = createOpenAI({
   baseURL: process.env.ANTHROPIC_API_URL, // Optional for Claude
 });
 
-// MiniMax provider
-const minimax = createMiniMax({
+// MiniMax provider via OpenAI-compatible API
+const minimax = createOpenAI({
   apiKey: process.env.MINIMAX_API_KEY || "demo-key",
+  baseURL: process.env.MINIMAX_API_URL || "https://api.minimax.chat/v1",
 });
 
 /**

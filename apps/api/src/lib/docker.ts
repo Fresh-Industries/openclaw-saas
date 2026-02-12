@@ -50,15 +50,39 @@ export class DockerClient {
     try {
       await docker.getNetwork(this.networkName).inspect();
     } catch {
-      await docker.createNetwork({
-        Name: this.networkName,
-        Driver: "bridge",
-        IPAM: {
-          Driver: "default",
-          Config: [{ Subnet: "172.20.0.0/16" }],
-        },
-      });
+      try {
+        await docker.createNetwork({
+          Name: this.networkName,
+          Driver: "bridge",
+          CheckDuplicate: true,
+          IPAM: {
+            Driver: "default",
+            Config: [{ Subnet: "172.20.0.0/16" }],
+          },
+        });
+      } catch (error) {
+        if (this.isOverlappingPoolError(error)) {
+          await docker.createNetwork({
+            Name: this.networkName,
+            Driver: "bridge",
+            CheckDuplicate: true,
+          });
+          return;
+        }
+        throw error;
+      }
     }
+  }
+
+  private isOverlappingPoolError(error: unknown): boolean {
+    if (typeof error !== "object" || error === null) return false;
+    const dockerError = error as {
+      statusCode?: number;
+      message?: string;
+      json?: { message?: string };
+    };
+    const message = dockerError.json?.message || dockerError.message || "";
+    return dockerError.statusCode === 403 && message.includes("Pool overlaps");
   }
 
   /**

@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "better-auth/react";
-import { signIn, signOut } from "better-auth/react";
 import { 
   Loader2, 
   CheckCircle2, 
@@ -15,6 +13,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { signIn, useSession } from "@/lib/auth";
 
 interface Connection {
   id: string;

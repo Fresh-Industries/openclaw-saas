@@ -4,7 +4,7 @@
 
 "use client";
 
-import { createContext, useContext, ReactNode } from "react";
+import { type ReactNode } from "react";
 import { createAuthClient } from "better-auth/react";
 
 export const authClient = createAuthClient({
@@ -14,18 +14,14 @@ export const authClient = createAuthClient({
 export const { signIn, signUp, signOut, useSession } = authClient;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  return (
-    <authClient.provider>
-      {children}
-    </authClient.provider>
-  );
+  return <>{children}</>;
 }
 
 export function useAuth() {
-  const { data: session, isLoading } = useSession();
+  const { data: session, isPending } = useSession();
   return {
     session,
-    isLoading,
+    isLoading: isPending,
     isAuthenticated: !!session,
   };
 }

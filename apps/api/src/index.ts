@@ -29,7 +29,6 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || "http://localhost:3000",
   credentials: true,
 }));
-app.use(express.json({ limit: "10mb" }));
 
 // Health check
 app.get("/health", (_req, res) => {
@@ -38,6 +37,9 @@ app.get("/health", (_req, res) => {
 
 // Better Auth endpoint (mounted at /api/auth)
 app.use("/api/auth", authRoutes);
+
+// JSON parser for non-auth API routes
+app.use(express.json({ limit: "10mb" }));
 
 // API Routes
 app.use("/api/containers", containerRoutes);

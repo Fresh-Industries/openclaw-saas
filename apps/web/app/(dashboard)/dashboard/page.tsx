@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useSession } from "better-auth/react";
 import { useChat } from "ai/react";
 import { Send, Bot, User, Loader2, AlertCircle, Settings, ChevronDown } from "lucide-react";
 
@@ -15,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useSession } from "@/lib/auth";
 
 interface Message {
   id: string;
@@ -60,11 +60,15 @@ export default function ChatPage() {
       model: selectedModel,
     },
     onFinish: (message) => {
+      if (message.role !== "assistant" && message.role !== "user") {
+        return;
+      }
+      const role: Message["role"] = message.role;
       setLocalMessages((prev) => [
         ...prev.filter((m) => m.id !== "streaming"),
         {
           id: message.id,
-          role: message.role,
+          role,
           content: message.content,
           timestamp: new Date(),
         },
@@ -167,7 +171,7 @@ export default function ChatPage() {
                     </>
                   ) : (
                     <>
-                      <AvatarImage src={session?.user?.image} />
+                      <AvatarImage src={session?.user?.image ?? undefined} />
                       <AvatarFallback>
                         <User className="h-4 w-4" />
                       </AvatarFallback>

@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut, useSession } from "better-auth/react";
 import { 
   Bot, 
   MessageSquare, 
@@ -32,6 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { signOut, useSession } from "@/lib/auth";
 
 const navigation = [
   { name: "Chat", href: "/dashboard", icon: MessageSquare },
@@ -161,7 +161,7 @@ export default function DashboardLayout({
           <Separator className="mb-4" />
           <div className="flex items-center gap-3">
             <Avatar className="h-9 w-9">
-              <AvatarImage src={session?.user?.image} />
+              <AvatarImage src={session?.user?.image ?? undefined} />
               <AvatarFallback>
                 {session?.user?.name?.charAt(0) || "U"}
               </AvatarFallback>
@@ -198,7 +198,7 @@ export default function DashboardLayout({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center gap-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={session?.user?.image} />
+                  <AvatarImage src={session?.user?.image ?? undefined} />
                   <AvatarFallback>
                     {session?.user?.name?.charAt(0) || "U"}
                   </AvatarFallback>

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -29,8 +30,8 @@ type SignupForm = z.infer<typeof signupSchema>;
 
 export default function SignupPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const {
     register,
@@ -42,7 +43,6 @@ export default function SignupPage() {
 
   const onSubmit = async (data: SignupForm) => {
     setIsLoading(true);
-    setError(null);
 
     try {
       const result = await signUp({
@@ -52,13 +52,26 @@ export default function SignupPage() {
       });
 
       if (result.error) {
-        setError(result.error.message || "Registration failed");
+        toast({
+          title: "Error",
+          description: result.error.message || "Registration failed",
+          variant: "destructive",
+        });
       } else {
+        toast({
+          title: "Welcome!",
+          description: "Your account has been created successfully.",
+          variant: "success",
+        });
         router.push("/dashboard");
         router.refresh();
       }
     } catch (err) {
-      setError("Something went wrong. Please try again.");
+      toast({
+        title: "Error",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +84,11 @@ export default function SignupPage() {
         provider: "github",
       });
     } catch (err) {
-      setError("GitHub sign up failed");
+      toast({
+        title: "Error",
+        description: "GitHub sign up failed",
+        variant: "destructive",
+      });
       setIsLoading(false);
     }
   };
@@ -109,15 +126,8 @@ export default function SignupPage() {
             </span>
           </div>
 
-          {/* Error Message */}
-          {error && (
-            <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md">
-              {error}
-            </div>
-          )}
-
           {/* Signup Form */}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4}>
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
               <Input

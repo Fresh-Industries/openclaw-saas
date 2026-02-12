@@ -3,7 +3,8 @@
  */
 
 import { Router, Request, Response } from "express";
-import { generateChat, streamChat, createAgentSystemPrompt, CoreMessage } from "../lib/ai";
+import { streamText, CoreMessage, generateText } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
 import { prisma } from "../lib/db";
 import { z } from "zod";
 
@@ -16,9 +17,13 @@ const chatSchema = z.object({
   stream: z.boolean().optional(),
 });
 
+const openai = createOpenAI({
+  apiKey: process.env.OPENAI_API_KEY || "sk-demo",
+});
+
 /**
  * POST /api/ai/chat
- * Send a message to the AI agent (fallback when container is unavailable)
+ * Send a message to the AI agent with streaming support
  */
 router.post("/chat", async (req: Request, res: Response) => {
   try {
@@ -28,8 +33,17 @@ router.post("/chat", async (req: Request, res: Response) => {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     const packs = skillPacks || user?.skillPacks || ["personal"];
 
-    // Create system prompt based on skill packs
-    const systemPrompt = createAgentSystemPrompt("OpenClaw Agent", packs);
+    // Create system prompt
+    const systemPrompt = `You are an OpenClaw AI agent.
+
+Your skills include:
+${packs.map((p) => `- ${p}`).join("\n")}
+
+Guidelines:
+- Be helpful, concise, and practical
+- Use your tools when needed
+- Ask clarifying questions when requirements are unclear
+- Always prefer action over inaction`;
 
     const messages: CoreMessage[] = [
       { role: "system", content: systemPrompt },
@@ -37,18 +51,41 @@ router.post("/chat", async (req: Request, res: Response) => {
     ];
 
     if (stream) {
-      res.setHeader("Content-Type", "text/plain");
-      res.setHeader("Transfer-Encoding", "chunked");
+      // Streaming response for Vercel AI SDK
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
 
-      for await (const chunk of streamChat(messages)) {
+      const result = await streamText({
+        model: openai("gpt-4o"),
+        messages,
+        onFinish: () => {
+          res.end();
+        },
+        onError: (error) => {
+          console.error("Streaming error:", error);
+          res.end();
+        },
+      });
+
+      // Pipe the stream to response
+      for await (const chunk of result.textStream) {
         res.write(chunk);
       }
-      res.end();
+
       return;
     }
 
-    const result = await generateChat(messages);
-    res.json(result);
+    // Non-streaming response
+    const result = await generateText({
+      model: openai("gpt-4o"),
+      messages,
+    });
+
+    res.json({
+      text: result.text,
+      usage: result.usage,
+    });
   } catch (error) {
     console.error("Chat error:", error);
     res.status(500).json({ error: "Chat failed" });
@@ -61,19 +98,22 @@ router.post("/chat", async (req: Request, res: Response) => {
  */
 router.post("/generate", async (req: Request, res: Response) => {
   try {
-    const { prompt, type = "text", model = "gpt-4o" } = req.body;
+    const { prompt, model = "gpt-4o" } = req.body;
 
     if (!prompt) {
       res.status(400).json({ error: "Prompt required" });
       return;
     }
 
-    const result = await generateChat(
-      [{ role: "user", content: prompt }],
-      { model }
-    );
+    const result = await generateText({
+      model: openai(model),
+      messages: [{ role: "user", content: prompt }],
+    });
 
-    res.json(result);
+    res.json({
+      text: result.text,
+      usage: result.usage,
+    });
   } catch (error) {
     console.error("Generate error:", error);
     res.status(500).json({ error: "Generation failed" });
@@ -100,11 +140,15 @@ router.post("/analyze", async (req: Request, res: Response) => {
       improve: `Improve the following text:\n\n${text}`,
     };
 
-    const result = await generateChat(
-      [{ role: "user", content: prompts[task] || prompts.summarize }]
-    );
+    const result = await generateText({
+      model: openai("gpt-4o"),
+      messages: [{ role: "user", content: prompts[task] || prompts.summarize }],
+    });
 
-    res.json(result);
+    res.json({
+      text: result.text,
+      usage: result.usage,
+    });
   } catch (error) {
     console.error("Analyze error:", error);
     res.status(500).json({ error: "Analysis failed" });

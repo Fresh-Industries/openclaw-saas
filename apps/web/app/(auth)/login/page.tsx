@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -24,8 +25,8 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const {
     register,
@@ -37,7 +38,6 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginForm) => {
     setIsLoading(true);
-    setError(null);
 
     try {
       const result = await signIn({
@@ -46,13 +46,26 @@ export default function LoginPage() {
       });
 
       if (result.error) {
-        setError(result.error.message || "Invalid credentials");
+        toast({
+          title: "Error",
+          description: result.error.message || "Invalid credentials",
+          variant: "destructive",
+        });
       } else {
+        toast({
+          title: "Welcome back!",
+          description: "You've been signed in successfully.",
+          variant: "success",
+        });
         router.push("/dashboard");
         router.refresh();
       }
     } catch (err) {
-      setError("Something went wrong. Please try again.");
+      toast({
+        title: "Error",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -65,7 +78,11 @@ export default function LoginPage() {
         provider: "github",
       });
     } catch (err) {
-      setError("GitHub sign in failed");
+      toast({
+        title: "Error",
+        description: "GitHub sign in failed",
+        variant: "destructive",
+      });
       setIsLoading(false);
     }
   };
@@ -102,13 +119,6 @@ export default function LoginPage() {
               or continue with email
             </span>
           </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md">
-              {error}
-            </div>
-          )}
 
           {/* Login Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

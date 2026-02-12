@@ -2,14 +2,13 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useSession } from "better-auth/react";
-import { Send, Bot, User, Loader2 } from "lucide-react";
+import { useChat } from "ai/react";
+import { Send, Bot, User, Loader2, AlertCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card } from "@/components/ui/card";
 
 interface Message {
   id: string;
@@ -20,32 +19,57 @@ interface Message {
 
 export default function ChatPage() {
   const { data: session } = useSession();
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [localMessages, setLocalMessages] = useState<Message[]>([
     {
-      id: "1",
+      id: "welcome",
       role: "assistant",
       content: "Hi! I'm your OpenClaw AI agent. How can I help you today?",
       timestamp: new Date(),
     },
   ]);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
+  // Use Vercel AI SDK's useChat for streaming
+  const {
+    messages: streamingMessages,
+    input,
+    handleInputChange,
+    handleSubmit,
+    isLoading,
+    error,
+    setMessages,
+  } = useChat({
+    api: "/api/ai/chat",
+    body: {
+      userId: session?.user?.id || "demo",
+      stream: true,
+    },
+    onFinish: (message) => {
+      // Add to local messages when streaming finishes
+      setLocalMessages((prev) => [
+        ...prev.filter((m) => m.id !== "streaming"),
+        {
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          timestamp: new Date(),
+        },
+      ]);
+    },
+  });
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  };
+  }, [localMessages, streamingMessages]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    // Add user message immediately
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
@@ -53,56 +77,29 @@ export default function ChatPage() {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsLoading(true);
+    setLocalMessages((prev) => [...prev, userMessage]);
 
-    try {
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: session?.user?.id || "demo",
-          message: userMessage.content,
-        }),
-      });
-
-      const data = await response.json();
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.text || data.response || "I couldn't process that request.",
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "Sorry, something went wrong. Please try again.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
+    // Submit to streaming chat
+    handleSubmit(e as any);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e as React.FormEvent);
+      handleSend(e as React.FormEvent);
     }
   };
+
+  // Show streaming message while AI is responding
+  const isStreaming = isLoading || streamingMessages.length > localMessages.length - 1;
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Messages */}
       <ScrollArea className="flex-1 pr-4" ref={scrollRef}>
         <div className="space-y-4 pb-4">
-          {messages.map((message) => (
+          {/* Display local messages (committed) */}
+          {localMessages.filter((m) => !streamingMessages.some((sm) => sm.id === m.id)).map((message) => (
             <div
               key={message.id}
               className={`flex gap-3 ${
@@ -142,15 +139,34 @@ export default function ChatPage() {
             </div>
           ))}
 
-          {isLoading && (
-            <div className="flex gap-3">
+          {/* Show streaming content */}
+          {streamingMessages.slice(localMessages.length - 1).map((message) => (
+            <div key={message.id} className="flex gap-3">
               <Avatar className="h-8 w-8 shrink-0">
                 <AvatarFallback>
                   <Bot className="h-4 w-4" />
                 </AvatarFallback>
               </Avatar>
-              <div className="bg-muted rounded-lg px-4 py-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
+              <div className="max-w-[80%] rounded-lg px-4 py-2 bg-muted">
+                {isLoading ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm">Thinking</span>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </div>
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {/* Error */}
+          {error && (
+            <div className="flex gap-3 p-4 rounded-lg bg-red-50 border border-red-200">
+              <AlertCircle className="h-5 w-5 text-red-500 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-red-700">Something went wrong</p>
+                <p className="text-sm text-red-600">{error.message}</p>
               </div>
             </div>
           )}
@@ -159,17 +175,25 @@ export default function ChatPage() {
 
       {/* Input */}
       <div className="border-t pt-4 mt-4">
-        <form onSubmit={handleSubmit} className="flex gap-2">
+        <form onSubmit={handleSend} className="flex gap-2">
           <Textarea
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             placeholder="Type your message..."
             className="min-h-[60px] resize-none"
             disabled={isLoading}
           />
-          <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
-            <Send className="h-4 w-4" />
+          <Button
+            type="submit"
+            size="icon"
+            disabled={isLoading || !input.trim()}
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
             <span className="sr-only">Send</span>
           </Button>
         </form>

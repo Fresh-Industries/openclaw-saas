@@ -17,7 +17,8 @@ import {
   User,
   Link as LinkIcon,
   CreditCard as CreditCardIcon,
-  Shield
+  Shield,
+  Sparkles
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ import {
 
 const navigation = [
   { name: "Chat", href: "/dashboard", icon: MessageSquare },
+  { name: "Skills", href: "/dashboard/skills", icon: Sparkles },
   { name: "Containers", href: "/dashboard/containers", icon: Bot },
   { name: "Billing", href: "/dashboard/billing", icon: CreditCard },
   { name: "Team", href: "/dashboard/team", icon: Users },

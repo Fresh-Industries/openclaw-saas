@@ -1,5 +1,6 @@
 /**
  * Docker Client - Manages OpenClaw containers per user
+ * Uses official coollabsio/openclaw image
  */
 
 import Dockerode from "dockerode";
@@ -13,6 +14,8 @@ export interface UserContainerConfig {
   email: string;
   skillPacks: string[];
   environment: Record<string, string>;
+  aiProvider?: string;
+  aiApiKey?: string;
   memoryLimit?: string;
   cpuLimit?: string;
 }
@@ -28,7 +31,7 @@ export interface ContainerInfo {
 }
 
 export class DockerClient {
-  private readonly imageName = "openclaw:latest";
+  private readonly imageName = "coollabsio/openclaw:latest";
   private readonly networkName = "openclaw-network";
 
   /**
@@ -60,8 +63,8 @@ export class DockerClient {
             Config: [{ Subnet: "172.20.0.0/16" }],
           },
         });
-      } catch (error) {
-        if (this.isOverlappingPoolError(error)) {
+      } catch (error: any) {
+        if (error?.statusCode === 403 && error?.json?.message?.includes("Pool overlaps")) {
           await docker.createNetwork({
             Name: this.networkName,
             Driver: "bridge",
@@ -74,25 +77,16 @@ export class DockerClient {
     }
   }
 
-  private isOverlappingPoolError(error: unknown): boolean {
-    if (typeof error !== "object" || error === null) return false;
-    const dockerError = error as {
-      statusCode?: number;
-      message?: string;
-      json?: { message?: string };
-    };
-    const message = dockerError.json?.message || dockerError.message || "";
-    return dockerError.statusCode === 403 && message.includes("Pool overlaps");
-  }
-
   /**
    * Ensure OpenClaw image exists
    */
   private async ensureImage(): Promise<void> {
     try {
       await docker.getImage(this.imageName).inspect();
+      console.log("OpenClaw image found:", this.imageName);
     } catch {
-      console.log(`OpenClaw image '${this.imageName}' not found. Run 'docker build' first.`);
+      console.log(`Pulling OpenClaw image: ${this.imageName}`);
+      await docker.pull(this.imageName);
     }
   }
 
@@ -102,24 +96,43 @@ export class DockerClient {
   async createContainer(config: UserContainerConfig): Promise<ContainerInfo> {
     const containerName = `openclaw-${config.userId}`;
 
+    // Build environment variables for OpenClaw
+    const envVars = [
+      `USER_ID=${config.userId}`,
+      `USER_EMAIL=${config.email}`,
+      // AI Provider (at least one required)
+      config.aiProvider === "anthropic" 
+        ? `ANTHROPIC_API_KEY=${config.aiApiKey}`
+        : config.aiProvider === "openai"
+        ? `OPENAI_API_KEY=${config.aiApiKey}`
+        : `ANTHROPIC_API_KEY=${config.aiApiKey}`,
+      // Auth
+      `AUTH_PASSWORD=${config.userId}-secret`,
+      `OPENCLAW_GATEWAY_TOKEN=${config.userId}-gateway-token`,
+      // Network
+      `OPENCLAW_GATEWAY_BIND=lan`,
+      `OPENCLAW_GATEWAY_PORT=18789`,
+    ];
+
     const container = await docker.createContainer({
       name: containerName,
       Image: this.imageName,
-      Env: [
-        `USER_ID=${config.userId}`,
-        `USER_EMAIL=${config.email}`,
-        `SKILL_PACKS=${config.skillPacks.join(",")}`,
-        ...Object.entries(config.environment).map(([k, v]) => `${k}=${v}`),
-      ],
+      Env: envVars,
       HostConfig: {
         Memory: config.memoryLimit ? this.parseMemory(config.memoryLimit) : 512 * 1024 * 1024,
         CpuPeriod: 100000,
         CpuQuota: config.cpuLimit ? parseFloat(config.cpuLimit) * 100000 : 50000,
         NetworkMode: this.networkName,
+        AutoRemove: false,
       },
       Labels: {
         userId: config.userId,
         type: "openclaw",
+        app: "openclaw-saas",
+      },
+      ExposedPorts: {
+        "18789/tcp": {},
+        "8080/tcp": {},
       },
     });
 
@@ -130,10 +143,10 @@ export class DockerClient {
     return {
       id: info.Id,
       name: containerName,
-      status: info.State.Running ? "running" : "stopped",
+      status: info.State?.Running ? "running" : "stopped",
       image: this.imageName,
-      createdAt: new Date(info.Created),
-      lastActivity: new Date(info.State.FinishedAt || info.Created),
+      createdAt: new Date(info.Created || Date.now()),
+      lastActivity: new Date(info.State?.FinishedAt || info.Created || Date.now()),
       ports: info.NetworkSettings?.Ports || {},
     };
   }
@@ -146,14 +159,13 @@ export class DockerClient {
     try {
       const container = docker.getContainer(containerName);
       const info = await container.inspect();
-      
       return {
         id: info.Id,
         name: containerName,
-        status: info.State.Running ? "running" : "stopped",
-        image: info.Config.Image,
-        createdAt: new Date(info.Created),
-        lastActivity: new Date(info.State.FinishedAt || info.Created),
+        status: info.State?.Running ? "running" : "stopped",
+        image: info.Config?.Image || this.imageName,
+        createdAt: new Date(info.Created || Date.now()),
+        lastActivity: new Date(info.State?.FinishedAt || info.Created || Date.now()),
         ports: info.NetworkSettings?.Ports || {},
       };
     } catch {
@@ -165,39 +177,62 @@ export class DockerClient {
    * List all user containers
    */
   async listContainers(): Promise<ContainerInfo[]> {
-    const containers = await docker.listContainers({
-      filters: { label: ["type=openclaw"] },
-    });
+    try {
+      const containers = await docker.listContainers({
+        filters: { label: ["type=openclaw"] },
+      });
 
-    return containers.map((c) => ({
-      id: c.Id,
-      name: c.Names[0].replace("/", ""),
-      status: c.State === "running" ? "running" : "stopped",
-      image: c.Image,
-      createdAt: new Date(c.Created),
-      lastActivity: new Date(c.Status),
-      ports: c.Ports.reduce((acc, p) => {
-        if (p.PublicPort) acc[p.PrivatePort] = p.PublicPort;
-        return acc;
-      }, {} as Record<string, number>),
-    }));
+      return containers.map((c) => ({
+        id: c.Id,
+        name: c.Names[0]?.replace("/", "") || "unknown",
+        status: c.State === "running" ? "running" : "stopped",
+        image: c.Image,
+        createdAt: new Date(c.Created ? c.Created * 1000 : Date.now()),
+        lastActivity: new Date(),
+        ports: c.Ports.reduce((acc, p) => {
+          if (p.PublicPort) acc[p.PrivatePort] = p.PublicPort;
+          return acc;
+        }, {} as Record<string, number>),
+      }));
+    } catch {
+      return [];
+    }
   }
 
   /**
-   * Send message to user's agent
+   * Send message to user's agent (via HTTP API)
    */
   async sendMessage(userId: string, message: string): Promise<string> {
     const containerName = `openclaw-${userId}`;
-    const container = docker.getContainer(containerName);
+    try {
+      const container = docker.getContainer(containerName);
+      const info = await container.inspect();
+      const port = info.NetworkSettings?.Ports?.["18789/tcp"]?.[0]?.PublicPort;
+      
+      if (!port) {
+        return "Container running but no gateway port exposed";
+      }
 
-    const exec = await container.exec({
-      AttachStdout: true,
-      AttachStderr: true,
-      Cmd: ["sh", "-c", `echo '${message.replace(/'/g, "'\\''")}' | openclaw --send`],
-    });
+      // Call the gateway API
+      const gatewayUrl = `http://localhost:${port}`;
+      const response = await fetch(`${gatewayUrl}/api/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${userId}-gateway-token`,
+        },
+        body: JSON.stringify({ message }),
+      });
 
-    const result = await exec.start({ detach: false });
-    return result.toString();
+      if (!response.ok) {
+        return `Error: ${response.statusText}`;
+      }
+
+      const data = await response.json();
+      return data.response || JSON.stringify(data);
+    } catch (error) {
+      return `Failed to send message: ${error}`;
+    }
   }
 
   /**
@@ -236,9 +271,13 @@ export class DockerClient {
    */
   async getLogs(userId: string, tail: number = 100): Promise<string> {
     const containerName = `openclaw-${userId}`;
-    const container = docker.getContainer(containerName);
-    const logs = await container.logs({ stdout: true, stderr: true, tail });
-    return logs.toString();
+    try {
+      const container = docker.getContainer(containerName);
+      const logs = await container.logs({ stdout: true, stderr: true, tail });
+      return logs.toString();
+    } catch {
+      return "No logs available";
+    }
   }
 
   /**

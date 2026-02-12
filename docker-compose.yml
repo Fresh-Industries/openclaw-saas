@@ -1,7 +1,7 @@
 version: "3.8"
 
 services:
-  # Traefik reverse proxy
+  # Traefik reverse proxy (production)
   traefik:
     image: traefik:v3.0
     command:

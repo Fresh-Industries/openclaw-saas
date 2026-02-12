@@ -25,8 +25,8 @@
 - [x] Create chat input with enter/shift-enter support
 
 ### User Settings
-- [ ] Create `/settings/profile/page.tsx` - Profile management
-- [ ] Create `/settings/connections/page.tsx` - OAuth connections
+- [x] Create `/settings/profile/page.tsx` - Profile management
+- [x] Create `/settings/connections/page.tsx` - OAuth connections
 - [ ] Create `/settings/billing/page.tsx` - Stripe billing link
 - [ ] Create `/settings/security/page.tsx` - Password, 2FA
 

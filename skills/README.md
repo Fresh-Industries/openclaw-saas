@@ -4,59 +4,97 @@ This directory contains agent skills for OpenClaw SaaS development.
 
 ## Skills Installed
 
-### Vercel Skills
-| Skill | Path |
-|-------|------|
-| Vercel React Best Practices | `vercel-agent-skills/skills/react-best-practices/` |
-| Web Design Guidelines | `vercel-agent-skills/skills/web-design-guidelines/` |
-| Composition Patterns | `vercel-agent-skills/skills/composition-patterns/` |
-| Next.js Best Practices | `vercel-next-skills/skills/next-best-practices/` |
-| Next.js Cache Components | `vercel-next-skills/skills/next-cache-components/` |
+### agent-skills (Vercel)
+```
+skills/agent-skills/
+├── skills/composition-patterns/
+├── skills/react-best-practices/
+└── skills/web-design-guidelines/
+```
 
-### Anthropic Skills
-| Skill | Path |
-|-------|------|
-| MCP Builder | `anthropic-skills/skills/mcp-builder/` |
+### anthropic-skills (Anthropic)
+```
+skills/anthropic-skills/
+├── skills/frontend-design/
+├── skills/mcp-builder/
+├── skills/pdf/
+├── skills/docx/
+└── [more skills...]
+```
 
-### Better Auth Skills
-| Skill | Path |
-|-------|------|
-| Better Auth Best Practices | `better-auth-skills/` |
+### better-auth-skills
+```
+skills/better-auth-skills/
+├── better-auth/best-practices/SKILL.md
+├── better-auth/emailAndPassword/SKILL.md
+├── better-auth/create-auth/SKILL.md
+├── better-auth/twoFactor/SKILL.md
+├── better-auth/organization/SKILL.md
+└── security/
+```
 
-### Prisma Skills
-| Skill | Path |
-|-------|------|
-| Prisma Database Setup | `prisma-skills/prisma-database-setup/` |
-| Prisma CLI | `prisma-skills/prisma-cli/` |
-| Prisma Client API | `prisma-skills/prisma-client-api/` |
-| Prisma PostgreSQL | `prisma-skills/prisma-postgres/` |
+### next-skills (Vercel)
+```
+skills/next-skills/
+└── skills/next-best-practices/
+└── skills/next-cache-components/
+```
 
-### UI/UX Skills
-| Skill | Path |
-|-------|------|
-| UI/UX Pro Max | `ui-ux-skills/` |
+### prisma-skills
+```
+skills/prisma-skills/
+├── prisma-cli/
+├── prisma-client-api/
+├── prisma-database-setup/
+├── prisma-postgres/
+└── prisma-upgrade-v7/
+```
+
+### ui-ux-pro-max
+```
+skills/ui-ux-pro-max/
+├── .claude/skills/ui-ux-pro-max/SKILL.md
+├── README.md
+└── src/ui-ux-pro-max/
+```
 
 ## Usage
 
-When building features, check relevant SKILL.md files for best practices:
+When building features, check relevant skill files:
 
 ```bash
-# Read a skill
-cat vercel-agent-skills/skills/react-best-practices/SKILL.md
-cat prisma-skills/prisma-database-setup/SKILL.md
+# React best practices
+cat skills/agent-skills/skills/react-best-practices/SKILL.md
+
+# Prisma database setup
+cat skills/prisma-skills/prisma-database-setup/SKILL.md
+
+# Next.js best practices  
+cat skills/next-skills/skills/next-best-practices/SKILL.md
+
+# Better Auth practices
+cat skills/better-auth-skills/*.md
+
+# Web design guidelines
+cat skills/agent-skills/skills/web-design-guidelines/SKILL.md
+
+# Frontend design (Anthropic)
+cat skills/anthropic-skills/skills/mcp-builder/SKILL.md
 ```
 
 ## Adding More Skills
 
-Clone skills into this directory:
+Clone skills repos into this directory:
+
 ```bash
-git clone <skill-repo-url> skills/
+git clone <repo-url> skills/<folder-name>
 ```
 
-## Available Skills
+## Skill Sources
 
-For more skills, visit:
 - https://github.com/vercel-labs/agent-skills
 - https://github.com/anthropics/skills
 - https://github.com/better-auth/skills
+- https://github.com/vercel-labs/next-skills
 - https://github.com/prisma/skills
+- https://github.com/nextlevelbuilder/ui-ux-pro-max-skill

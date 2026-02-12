@@ -62,6 +62,8 @@ router.post("/", async (req: Request, res: Response) => {
       environment: environment || {},
       memoryLimit,
       cpuLimit,
+      // Default to MiniMax API key from server environment
+      aiApiKey: process.env.MINIMAX_API_KEY,
     });
 
     // Save to database

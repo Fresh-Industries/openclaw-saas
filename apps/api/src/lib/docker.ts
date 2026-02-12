@@ -97,15 +97,12 @@ export class DockerClient {
     const containerName = `openclaw-${config.userId}`;
 
     // Build environment variables for OpenClaw
+    const aiApiKey = config.aiApiKey || process.env.MINIMAX_API_KEY || "";
     const envVars = [
       `USER_ID=${config.userId}`,
       `USER_EMAIL=${config.email}`,
-      // AI Provider (at least one required)
-      config.aiProvider === "anthropic" 
-        ? `ANTHROPIC_API_KEY=${config.aiApiKey}`
-        : config.aiProvider === "openai"
-        ? `OPENAI_API_KEY=${config.aiApiKey}`
-        : `ANTHROPIC_API_KEY=${config.aiApiKey}`,
+      // AI Provider - Default to MiniMax
+      `MINIMAX_API_KEY=${aiApiKey}`,
       // Auth
       `AUTH_PASSWORD=${config.userId}-secret`,
       `OPENCLAW_GATEWAY_TOKEN=${config.userId}-gateway-token`,

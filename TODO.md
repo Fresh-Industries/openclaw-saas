@@ -36,6 +36,7 @@
 - [x] Add container status indicators
 - [x] Add container actions (stop, restart, delete)
 - [x] Add logs viewer for each container
+- [x] **FIXED**: Docker image name `coollabsio/openclaw:latest`
 
 ## Phase 3: Skill Packs & Billing (Week 3)
 

@@ -6,6 +6,7 @@ import { Router, Request, Response } from "express";
 import { dockerClient } from "../lib/docker";
 import { prisma } from "../lib/db";
 import { z } from "zod";
+import { auth } from "../lib/auth";
 
 const router = Router();
 
@@ -18,13 +19,19 @@ const createContainerSchema = z.object({
 
 /**
  * GET /api/containers
- * List user's containers
+ * List user's containers (session-based)
  */
 router.get("/", async (req: Request, res: Response) => {
   try {
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
     const containers = await dockerClient.listContainers();
     const userContainers = containers.filter(
-      (c) => c.name.includes(req.query.userId as string || "")
+      (c) => c.name.includes(session.user.id)
     );
 
     res.json(userContainers);
@@ -35,8 +42,78 @@ router.get("/", async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/containers/create-default
+ * Create a default container for the logged-in user (auto-creates on signup)
+ */
+router.post("/create-default", async (req: Request, res: Response) => {
+  try {
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const userId = session.user.id;
+
+    // Check if user already has a container
+    const existingContainer = await prisma.container.findFirst({
+      where: { userId },
+    });
+
+    if (existingContainer) {
+      res.json({ 
+        message: "Container already exists",
+        containerId: existingContainer.containerId 
+      });
+      return;
+    }
+
+    // Get user's skill packs from their profile, or default to "personal"
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const skillPacks = user?.skillPacks?.length 
+      ? user.skillPacks 
+      : ["personal"];
+
+    // Create the container
+    const container = await dockerClient.createContainer({
+      userId,
+      email: session.user.email || `${userId}@openclaw.local`,
+      skillPacks,
+      environment: {},
+      memoryLimit: "512m",
+      cpuLimit: "0.5",
+      // Default to MiniMax API key from server environment
+      aiApiKey: process.env.MINIMAX_API_KEY,
+    });
+
+    // Save to database
+    await prisma.container.create({
+      data: {
+        userId,
+        containerId: container.id,
+        name: container.name,
+        status: container.status,
+        skillPacks: JSON.stringify(skillPacks),
+        memoryLimit: "512m",
+        cpuLimit: "0.5",
+      },
+    });
+
+    console.log(`Container created for user ${userId}: ${container.id}`);
+    
+    res.status(201).json({
+      message: "Container created successfully",
+      container,
+    });
+  } catch (error) {
+    console.error("Create container error:", error);
+    res.status(500).json({ error: "Failed to create container" });
+  }
+});
+
+/**
  * POST /api/containers
- * Create a new container
+ * Create a new container (by userId in body)
  */
 router.post("/", async (req: Request, res: Response) => {
   try {

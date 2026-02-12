@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useChat } from "ai/react";
-import { Send, Bot, User, Loader2, AlertCircle, Settings, ChevronDown } from "lucide-react";
+import { Send, Bot, User, Loader2, AlertCircle, Plus, Sparkles, ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,6 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSession } from "@/lib/auth";
 
 interface Message {
@@ -33,6 +35,7 @@ const MODELS = [
 
 export default function ChatPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [selectedModel, setSelectedModel] = useState("minimax-m2.1");
   const [localMessages, setLocalMessages] = useState<Message[]>([
@@ -43,6 +46,46 @@ export default function ChatPage() {
       timestamp: new Date(),
     },
   ]);
+  const [hasContainer, setHasContainer] = useState<boolean | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+
+  // Check for container on load
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    fetch("/api/containers", {
+      headers: { "Content-Type": "application/json" },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setHasContainer(Array.isArray(data) && data.length > 0);
+      })
+      .catch(() => setHasContainer(false));
+  }, [session?.user?.id]);
+
+  // Create container handler
+  const handleCreateContainer = async () => {
+    setIsCreating(true);
+    try {
+      const res = await fetch("/api/containers/create-default", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.ok) {
+        setHasContainer(true);
+        // Optionally redirect to containers page
+        // router.refresh();
+      } else {
+        const error = await res.json();
+        alert(`Failed to create container: ${error.error || "Unknown error"}`);
+      }
+    } catch (err) {
+      alert(`Failed to create container: ${err}`);
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
   // Use Vercel AI SDK's useChat for streaming
   const {
@@ -109,6 +152,69 @@ export default function ChatPage() {
     return MODELS.find((m) => m.id === id) || MODELS[0];
   };
 
+  // Show loading state while checking
+  if (hasContainer === null) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-8rem)]">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Checking your setup...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show container creation UI if no container
+  if (!hasContainer) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-8rem)] gap-6">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 p-4 rounded-full bg-primary/10">
+              <Sparkles className="h-12 w-12 text-primary" />
+            </div>
+            <CardTitle>Create Your AI Agent</CardTitle>
+            <CardDescription>
+              Get your own OpenClaw Docker container with MiniMax M2.1 by default.
+              Your agent will be ready to help you with tasks.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ul className="text-sm text-muted-foreground space-y-2">
+              <li className="flex items-center gap-2">
+                <Bot className="h-4 w-4" /> Personal AI assistant
+              </li>
+              <li className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4" /> MiniMax M2.1 model
+              </li>
+              <li className="flex items-center gap-2">
+                <ArrowRight className="h-4 w-4" /> Skill packs & tools
+              </li>
+            </ul>
+            <Button 
+              className="w-full gap-2" 
+              onClick={handleCreateContainer}
+              disabled={isCreating}
+            >
+              {isCreating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4" />
+                  Create My Agent
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show chat interface
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Model Selector */}
@@ -119,7 +225,7 @@ export default function ChatPage() {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
                 {getModelInfo(selectedModel).name}
-                <ChevronDown className="h-4 w-4" />
+                <Bot className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">

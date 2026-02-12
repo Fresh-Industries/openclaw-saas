@@ -133,7 +133,7 @@ export default function SkillsPage() {
   const [agentConfig, setAgentConfig] = useState({
     name: "My Agent",
     personality: "You are a helpful, concise AI assistant.",
-    model: "minimax-m2.1",
+    model: "minimax-m2.5",
     temperature: 0.7,
     maxTokens: 4096,
   });
@@ -364,7 +364,7 @@ export default function SkillsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="minimax-m2.1">MiniMax M2.1 (Default)</SelectItem>
+                      <SelectItem value="minimax-m2.5">MiniMax M2.5 (Default)</SelectItem>
                       <SelectItem value="gpt-4o">GPT-4o</SelectItem>
                       <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
                       <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4</SelectItem>

@@ -26,7 +26,7 @@ interface Message {
 }
 
 const MODELS = [
-  { id: "minimax-m2.1", name: "MiniMax M2.1", provider: "MiniMax", context: "200K" },
+  { id: "minimax-m2.5", name: "MiniMax M2.5", provider: "MiniMax", context: "200K" },
   { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", context: "128K" },
   { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", context: "128K" },
   { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", provider: "Anthropic", context: "200K" },
@@ -37,7 +37,7 @@ export default function ChatPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [selectedModel, setSelectedModel] = useState("minimax-m2.1");
+  const [selectedModel, setSelectedModel] = useState("minimax-m2.5");
   const [localMessages, setLocalMessages] = useState<Message[]>([
     {
       id: "welcome",

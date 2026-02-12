@@ -25,7 +25,7 @@ const MODELS = {
   "gpt-4-turbo": { provider: "openai", contextWindow: 128000, maxOutput: 4096 },
   
   // MiniMax
-  "minimax-m2.1": { provider: "minimax", contextWindow: 200000, maxOutput: 8192 },
+  "minimax-m2.5": { provider: "minimax", contextWindow: 200000, maxOutput: 8192 },
   
   // Anthropic (via OpenAI compatible API)
   "claude-sonnet-4-20250514": { provider: "openai", contextWindow: 200000, maxOutput: 8192 },
@@ -64,7 +64,7 @@ router.get("/models", (_req: Request, res: Response) => {
  */
 router.post("/chat", async (req: Request, res: Response) => {
   try {
-    const { userId, message, skillPacks, stream = false, model = "minimax-m2.1" } = 
+    const { userId, message, skillPacks, stream = false, model = "minimax-m2.5" } = 
       chatSchema.parse(req.body);
 
     // Get user's skill packs
@@ -90,7 +90,7 @@ Guidelines:
 
     // Get model config
     const modelConfig = MODELS[model as keyof typeof MODELS];
-    const modelId = modelConfig ? model : "minimax-m2.1";
+    const modelId = modelConfig ? model : "minimax-m2.5";
 
     if (stream) {
       res.setHeader("Content-Type", "text/event-stream");
@@ -155,7 +155,7 @@ Guidelines:
  */
 router.post("/generate", async (req: Request, res: Response) => {
   try {
-    const { prompt, model = "minimax-m2.1" } = req.body;
+    const { prompt, model = "minimax-m2.5" } = req.body;
 
     if (!prompt) {
       res.status(400).json({ error: "Prompt required" });
@@ -189,7 +189,7 @@ router.post("/generate", async (req: Request, res: Response) => {
  */
 router.post("/analyze", async (req: Request, res: Response) => {
   try {
-    const { text, task = "summarize", model = "minimax-m2.1" } = req.body;
+    const { text, task = "summarize", model = "minimax-m2.5" } = req.body;
 
     if (!text) {
       res.status(400).json({ error: "Text required" });
@@ -230,7 +230,7 @@ router.post("/analyze", async (req: Request, res: Response) => {
  */
 router.post("/complete", async (req: Request, res: Response) => {
   try {
-    const { messages, model = "minimax-m2.1" } = req.body;
+    const { messages, model = "minimax-m2.5" } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       res.status(400).json({ error: "Messages array required" });

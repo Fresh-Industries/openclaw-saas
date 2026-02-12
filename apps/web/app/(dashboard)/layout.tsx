@@ -4,7 +4,21 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "better-auth/react";
-import { Bot, MessageSquare, Settings, Users, CreditCard, LogOut, Menu, X, ChevronDown } from "lucide-react";
+import { 
+  Bot, 
+  MessageSquare, 
+  Settings, 
+  Users, 
+  CreditCard, 
+  LogOut, 
+  Menu, 
+  X, 
+  ChevronDown,
+  User,
+  Link as LinkIcon,
+  CreditCard as CreditCardIcon,
+  Shield
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -23,7 +37,13 @@ const navigation = [
   { name: "Containers", href: "/dashboard/containers", icon: Bot },
   { name: "Billing", href: "/dashboard/billing", icon: CreditCard },
   { name: "Team", href: "/dashboard/team", icon: Users },
-  { name: "Settings", href: "/dashboard/settings", icon: Settings },
+];
+
+const settingsNav = [
+  { name: "Profile", href: "/dashboard/settings/profile", icon: User },
+  { name: "Connections", href: "/dashboard/settings/connections", icon: LinkIcon },
+  { name: "Billing", href: "/dashboard/settings/billing", icon: CreditCardIcon },
+  { name: "Security", href: "/dashboard/settings/security", icon: Shield },
 ];
 
 export default function DashboardLayout({
@@ -34,6 +54,9 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const { data: session } = useSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const isSettingsPage = pathname.startsWith("/dashboard/settings");
 
   return (
     <div className="min-h-screen bg-muted/50">
@@ -84,6 +107,52 @@ export default function DashboardLayout({
               </Link>
             );
           })}
+
+          <Separator className="my-4" />
+
+          {/* Settings dropdown */}
+          <div>
+            <button
+              onClick={() => setSettingsOpen(!settingsOpen)}
+              className={`flex items-center justify-between w-full gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                isSettingsPage
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Settings className="h-5 w-5" />
+                Settings
+              </div>
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${
+                  settingsOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            {settingsOpen && (
+              <div className="mt-1 ml-4 space-y-1 border-l-2 border-muted pl-4">
+                {settingsNav.map((item) => {
+                  const isActive = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+                        isActive
+                          ? "text-primary font-medium"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </nav>
 
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t">
@@ -145,6 +214,12 @@ export default function DashboardLayout({
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/settings/profile">
+                  <User className="mr-2 h-4 w-4" />
+                  Profile
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/dashboard/settings">
                   <Settings className="mr-2 h-4 w-4" />

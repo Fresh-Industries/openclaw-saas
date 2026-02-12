@@ -19,6 +19,7 @@
     "@prisma/client": "^7.4.0",
     "ai": "^6.0.79",
     "@ai-sdk/openai": "^3.0.26",
+    "@ai-sdk/minimax": "^0.1.1",
     "dockerode": "^4.0.0",
     "stripe": "^17.0.0"
   },

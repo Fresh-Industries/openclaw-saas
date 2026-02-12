@@ -1,10 +1,11 @@
 /**
- * AI Routes - Chat with agents
+ * AI Routes - Chat with agents with multi-model support
  */
 
 import { Router, Request, Response } from "express";
 import { streamText, CoreMessage, generateText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createMiniMax } from "@ai-sdk/minimax";
 import { prisma } from "../lib/db";
 import { z } from "zod";
 
@@ -15,19 +16,56 @@ const chatSchema = z.object({
   message: z.string(),
   skillPacks: z.array(z.string()).optional(),
   stream: z.boolean().optional(),
+  model: z.string().optional(),
 });
 
+const MODELS = {
+  // OpenAI
+  "gpt-4o": { provider: "openai", contextWindow: 128000, maxOutput: 4096 },
+  "gpt-4o-mini": { provider: "openai", contextWindow: 128000, maxOutput: 16384 },
+  "gpt-4-turbo": { provider: "openai", contextWindow: 128000, maxOutput: 4096 },
+  
+  // MiniMax
+  "minimax-m2.1": { provider: "minimax", contextWindow: 200000, maxOutput: 8192 },
+  
+  // Anthropic (via OpenAI compatible API)
+  "claude-sonnet-4-20250514": { provider: "openai", contextWindow: 200000, maxOutput: 8192 },
+  "claude-opus-4-20250514": { provider: "openai", contextWindow: 200000, maxOutput: 8192 },
+};
+
+// OpenAI provider (also used for Anthropic via compatible API)
 const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY || "sk-demo",
+  baseURL: process.env.ANTHROPIC_API_URL, // Optional for Claude
+});
+
+// MiniMax provider
+const minimax = createMiniMax({
+  apiKey: process.env.MINIMAX_API_KEY || "demo-key",
+});
+
+/**
+ * Get available models
+ */
+router.get("/models", (_req: Request, res: Response) => {
+  res.json({
+    models: Object.entries(MODELS).map(([id, info]) => ({
+      id,
+      provider: info.provider,
+      contextWindow: info.contextWindow,
+      maxOutput: info.maxOutput,
+    })),
+  });
 });
 
 /**
  * POST /api/ai/chat
- * Send a message to the AI agent with streaming support
+ * Send a message to the AI agent with multi-model support
  */
 router.post("/chat", async (req: Request, res: Response) => {
   try {
-    const { userId, message, skillPacks, stream = false } = chatSchema.parse(req.body);
+    const { userId, message, skillPacks, stream = false, model = "minimax-m2.1" } = 
+      chatSchema.parse(req.body);
 
     // Get user's skill packs
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -50,42 +88,61 @@ Guidelines:
       { role: "user", content: message },
     ];
 
+    // Get model config
+    const modelConfig = MODELS[model as keyof typeof MODELS];
+    const modelId = modelConfig ? model : "minimax-m2.1";
+
     if (stream) {
-      // Streaming response for Vercel AI SDK
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
-      const result = await streamText({
-        model: openai("gpt-4o"),
-        messages,
-        onFinish: () => {
-          res.end();
-        },
-        onError: (error) => {
-          console.error("Streaming error:", error);
-          res.end();
-        },
-      });
+      try {
+        const result = await streamText({
+          model: modelConfig?.provider === "minimax" 
+            ? minimax(modelId)
+            : openai(modelId) as any,
+          messages,
+          maxTokens: modelConfig?.maxOutput || 4096,
+          onFinish: () => {
+            res.end();
+          },
+          onError: (error) => {
+            console.error("Streaming error:", error);
+            res.end();
+          },
+        });
 
-      // Pipe the stream to response
-      for await (const chunk of result.textStream) {
-        res.write(chunk);
+        for await (const chunk of result.textStream) {
+          res.write(chunk);
+        }
+      } catch (error) {
+        console.error("MiniMax streaming error:", error);
+        res.end();
       }
 
       return;
     }
 
     // Non-streaming response
-    const result = await generateText({
-      model: openai("gpt-4o"),
-      messages,
-    });
+    try {
+      const result = await generateText({
+        model: modelConfig?.provider === "minimax"
+          ? minimax(modelId)
+          : openai(modelId) as any,
+        messages,
+        maxTokens: modelConfig?.maxOutput || 4096,
+      });
 
-    res.json({
-      text: result.text,
-      usage: result.usage,
-    });
+      res.json({
+        text: result.text,
+        usage: result.usage,
+        model,
+      });
+    } catch (error) {
+      console.error("Generation error:", error);
+      res.status(500).json({ error: "Generation failed" });
+    }
   } catch (error) {
     console.error("Chat error:", error);
     res.status(500).json({ error: "Chat failed" });
@@ -98,21 +155,27 @@ Guidelines:
  */
 router.post("/generate", async (req: Request, res: Response) => {
   try {
-    const { prompt, model = "gpt-4o" } = req.body;
+    const { prompt, model = "minimax-m2.1" } = req.body;
 
     if (!prompt) {
       res.status(400).json({ error: "Prompt required" });
       return;
     }
 
+    const modelConfig = MODELS[model as keyof typeof MODELS];
+
     const result = await generateText({
-      model: openai(model),
+      model: modelConfig?.provider === "minimax"
+        ? minimax(model)
+        : openai(model) as any,
       messages: [{ role: "user", content: prompt }],
+      maxTokens: modelConfig?.maxOutput || 4096,
     });
 
     res.json({
       text: result.text,
       usage: result.usage,
+      model,
     });
   } catch (error) {
     console.error("Generate error:", error);
@@ -126,7 +189,7 @@ router.post("/generate", async (req: Request, res: Response) => {
  */
 router.post("/analyze", async (req: Request, res: Response) => {
   try {
-    const { text, task = "summarize" } = req.body;
+    const { text, task = "summarize", model = "minimax-m2.1" } = req.body;
 
     if (!text) {
       res.status(400).json({ error: "Text required" });
@@ -140,18 +203,58 @@ router.post("/analyze", async (req: Request, res: Response) => {
       improve: `Improve the following text:\n\n${text}`,
     };
 
+    const modelConfig = MODELS[model as keyof typeof MODELS];
+
     const result = await generateText({
-      model: openai("gpt-4o"),
+      model: modelConfig?.provider === "minimax"
+        ? minimax(model)
+        : openai(model) as any,
       messages: [{ role: "user", content: prompts[task] || prompts.summarize }],
+      maxTokens: modelConfig?.maxOutput || 4096,
     });
 
     res.json({
       text: result.text,
       usage: result.usage,
+      model,
     });
   } catch (error) {
     console.error("Analyze error:", error);
     res.status(500).json({ error: "Analysis failed" });
+  }
+});
+
+/**
+ * POST /api/ai/chat/complete
+ * Non-streaming chat completion
+ */
+router.post("/complete", async (req: Request, res: Response) => {
+  try {
+    const { messages, model = "minimax-m2.1" } = req.body;
+
+    if (!messages || !Array.isArray(messages)) {
+      res.status(400).json({ error: "Messages array required" });
+      return;
+    }
+
+    const modelConfig = MODELS[model as keyof typeof MODELS];
+
+    const result = await generateText({
+      model: modelConfig?.provider === "minimax"
+        ? minimax(model)
+        : openai(model) as any,
+      messages: messages as CoreMessage[],
+      maxTokens: modelConfig?.maxOutput || 4096,
+    });
+
+    res.json({
+      text: result.text,
+      usage: result.usage,
+      model,
+    });
+  } catch (error) {
+    console.error("Complete error:", error);
+    res.status(500).json({ error: "Completion failed" });
   }
 });
 
